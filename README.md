@@ -44,6 +44,20 @@ print r.json()
 r = s.delete("http://127.0.0.1:5002/api/customers/12")
 ```
 
+## To encrypt password
+
+```
+from Crypto.Cipher import XOR
+import base64
+key = 'Riverdale'
+def encrypt(key, plaintext):
+  cipher = XOR.new(key)
+  return base64.b64encode(cipher.encrypt(plaintext))
+  
+ciphertext = encrypt(key,'password')
+print ciphertext
+```
+
 Thank you essentialSQL for the sample database. 
 https://www.essentialsql.com/get-ready-to-learn-sql-how-to-install-sqlite-and-the-sample-database/
 

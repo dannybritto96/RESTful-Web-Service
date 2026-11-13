@@ -5,7 +5,6 @@ from sqlalchemy.exc import OperationalError
 from json import dumps
 from flask_jsonpify import jsonify
 from flask_httpauth import HTTPBasicAuth
-from Crypto.Cipher import XOR
 import base64
 
 db_connect = create_engine('sqlite:///EssentialSQL.db')
@@ -14,9 +13,11 @@ api = Api(app)
 auth = HTTPBasicAuth()
 secret_key = 'Riverdale'
 
-def decrypt(secret_key,ciphertext):
-    cipher = XOR.new(secret_key)
-    return cipher.decrypt(base64.b64decode(ciphertext))
+def decrypt(secret_key, ciphertext):
+    """XOR decrypt, compatible with the old PyCrypto XOR cipher."""
+    key = secret_key.encode() if isinstance(secret_key, str) else secret_key
+    data = base64.b64decode(ciphertext)
+    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
 
 @auth.verify_password
 def verify(username,password):
@@ -24,8 +25,11 @@ def verify(username,password):
     try:
         query = conn.execute("select password from Users where username = \"{0}\"".format(username))
         result = {'data': [dict(zip(tuple (query.keys()), i)) for i in query.cursor]}
-        if decrypt(secret_key,result['data'][0]['password'].encode('ascii','ignore')) == password:
+        if not result['data']:
+            return False
+        if decrypt(secret_key, result['data'][0]['password'].encode('ascii', 'ignore')).decode() == password:
             return True
+        return False
     except OperationalError as e:
         return False
 
@@ -58,7 +62,7 @@ class Customers(Resource):
         params = {}
         customer_id = None
         update_query = "update Customers set "
-        for i,j in args.iteritems():
+        for i,j in args.items():
             if i == 'CustomerID':
                 customer_id = j
             update_query = update_query + "{0} = \"{1}\",".format(i,j)

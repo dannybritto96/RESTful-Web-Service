@@ -1,6 +1,6 @@
 from flask import Flask, request
 from flask_restful import Resource, Api, reqparse
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from json import dumps
 from flask_jsonpify import jsonify
@@ -23,7 +23,7 @@ def decrypt(secret_key, ciphertext):
 def verify(username,password):
     conn = db_connect.connect()
     try:
-        query = conn.execute("select password from Users where username = \"{0}\"".format(username))
+        query = conn.execute(text("select password from Users where username = \"{0}\"".format(username)))
         result = {'data': [dict(zip(tuple (query.keys()), i)) for i in query.cursor]}
         if not result['data']:
             return False
@@ -32,14 +32,19 @@ def verify(username,password):
         return False
     except OperationalError as e:
         return False
+    finally:
+        conn.close()
 
 class Customers(Resource):
     @auth.login_required
     def get(self,customer_id):
         conn = db_connect.connect()
-        query = conn.execute("select * from Customers where CustomerID=%d;" % int(customer_id))
-        result = {'data': [dict(zip(tuple (query.keys()), i)) for i in query.cursor]}
-        return jsonify(result)
+        try:
+            query = conn.execute(text("select * from Customers where CustomerID=%d;" % int(customer_id)))
+            result = {'data': [dict(zip(tuple (query.keys()), i)) for i in query.cursor]}
+            return jsonify(result)
+        finally:
+            conn.close()
 
     @auth.login_required
     def post(self):
@@ -51,10 +56,13 @@ class Customers(Resource):
         State = request.args.get('State')
         conn = db_connect.connect()
         try:
-            query = conn.execute("insert into Customers(CompanyName,ContactName,ContactTitle,Address,City,State) values('{0}','{1}','{2}','{3}','{4}','{5}');".format(CompanyName,ContactName,ContactTitle,Address,City,State))
+            query = conn.execute(text("insert into Customers(CompanyName,ContactName,ContactTitle,Address,City,State) values('{0}','{1}','{2}','{3}','{4}','{5}');".format(CompanyName,ContactName,ContactTitle,Address,City,State)))
+            conn.commit()
             return {'status':'success'}
         except:
             return {'status':'failed'}
+        finally:
+            conn.close()
 
     @auth.login_required
     def put(self):
@@ -73,24 +81,30 @@ class Customers(Resource):
         update_query = update_query + " where CustomerID = {};".format(customer_id)
         conn = db_connect.connect()
         try:
-            query = conn.execute(update_query)
-            query = conn.execute("select * from Customers where CustomerID=%d;" % int(customer_id))
+            query = conn.execute(text(update_query))
+            conn.commit()
+            query = conn.execute(text("select * from Customers where CustomerID=%d;" % int(customer_id)))
             result = {'data': [dict(zip(tuple (query.keys()), i)) for i in query.cursor]}
             return jsonify(result)
         except:
             return {'status':'failed'}
+        finally:
+            conn.close()
 
     @auth.login_required
     def delete(self,customer_id):
         conn = db_connect.connect()
         try:
-            query = conn.execute("delete from Customers where CustomerID=%d;" % int(customer_id))
+            query = conn.execute(text("delete from Customers where CustomerID=%d;" % int(customer_id)))
+            conn.commit()
             return {'status':'success'}
         except:
             return {'status':'failed'}
+        finally:
+            conn.close()
 
 api.add_resource(Customers,'/api/customers',methods=['POST','PUT'],endpoint="customer")
 api.add_resource(Customers,'/api/customers/<customer_id>',methods=['DELETE','GET'],endpoint="manage_customer")
 
 if __name__ == '__main__':
-    app.run(port='5002')
+    app.run(port=5002)
